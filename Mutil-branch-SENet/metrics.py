@@ -3,6 +3,7 @@
 @File   : metrics.py
 @Time   : 2020/01/10
 @Author : Zengrui Zhao
+@Author : Jwang(fune tuning)
 """
 import warnings
 import numpy as np
@@ -425,6 +426,33 @@ def pair_coordinates(setA, setB, radius):
     unpairedB = np.array(unpairedB, dtype=np.int64)
 
     return pairing, unpairedA, unpairedB
+
+# jwang-metrics
+def compute_pixel_level_metrics(pred, target):
+    """ Compute the pixel-level tp, fp, tn, fn between
+    predicted img and groundtruth target
+    """
+
+    if not isinstance(pred, np.ndarray):
+        pred = np.array(pred)
+    if not isinstance(target, np.ndarray):
+        target = np.array(target)
+
+    tp = np.sum(pred * target)  # true postives
+    tn = np.sum((1-pred) * (1-target))  # true negatives
+    fp = np.sum(pred * (1-target))  # false postives
+    fn = np.sum((1-pred) * target)  # false negatives
+
+    precision = tp / (tp + fp + 1e-10)
+    recall = tp / (tp + fn + 1e-10)
+    F1 = 2 * precision * recall / (precision + recall + 1e-10)
+    acc = (tp + tn) / (tp + fp + tn + fn + 1e-10)
+    performance = (recall + tn/(tn+fp+1e-10)) / 2
+    iou = tp / (tp+fp+fn+1e-10)
+
+    return [acc, iou, recall, precision, F1, performance]
+
+
 
 if __name__ == '__main__':
     root = Path(__file__).parent.parent / 'data/test/Labels'
