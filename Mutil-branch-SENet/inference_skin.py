@@ -64,6 +64,7 @@ def main(args):
                 # plt.show()
                 # metricPQ, _ = get_fast_pq(mask, output)
                 # metricDice = get_dice_1(mask, output)
+                # acc, iou, recall, precision, F1, performance = compute_pixel_level_metrics(output, mask)
                 # print(f'Dice: {metricDice}, '
                 #       f'DQ: {metricPQ[0]}, '
                 #       f'SQ: {metricPQ[1]}, '
