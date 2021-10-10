@@ -452,8 +452,64 @@ def compute_pixel_level_metrics(pred, target):
 
     return [acc, iou, recall, precision, F1, performance]
 
+def post_processing_thresh(data, image, name, thresh=0.2, with_cls=False, model_cls=None):
+    if with_cls and model_cls is None:
+        raise AttributeError("Need classification model ... ")
 
+    start, end, centroid = [], [], []
+    data = normlize_255(data)
+    image = np.transpose(np.squeeze(image), [1, 2, 0]).copy()
+    data = (data > thresh * 255).astype(np.uint8) * 255
+    contour, _ = cv2.findContours(data, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    for one in contour:
+        [x, y] = np.round(np.mean(np.squeeze(one), axis=0)) if one.shape[0] != 1 else np.round(np.squeeze(one))
+        sx = x - 5 if x - 5 >= 0 else 0
+        sy = y - 5 if y - 5 >= 0 else 0
+        ex = x + 5 if x + 5 < data.shape[0] else data.shape[0] - 1
+        ey = y + 5 if y + 5 < data.shape[1] else data.shape[1] - 1
+        centroid.append((x, y))
+        start.append((sx, sy))
+        end.append((ex, ey))
 
+    # make prediction on classes
+    patch_zip = []
+    for (sx, sy), (ex, ey) in zip(start, end):
+        sx, sy, ex, ey = list(map(int, (sx, sy, ex, ey)))
+
+        sx_c = sx - 27 if sx - 27 >= 0 else 0
+        sy_c = sy - 27 if sy - 27 >= 0 else 0
+        ex_c = ex + 27 if ex + 27 < data.shape[0] else data.shape[0] - 1
+        ey_c = ey + 27 if ey + 27 < data.shape[1] else data.shape[1] - 1
+
+        ex_c = 64 if sx_c == 0 else ex_c
+        ey_c = 64 if sy_c == 0 else ey_c
+        sx_c = 435 if ex_c == 499 else sx_c
+        sy_c = 435 if ey_c == 499 else sy_c
+
+        patch_zip.append(image[sy_c: ey_c, sx_c: ex_c, :])
+        assert patch_zip[-1].shape == (64, 64, 3)
+
+    patch_zip = torch.as_tensor(np.transpose(
+        np.array(patch_zip, dtype=np.uint8), (0, 3, 1, 2)))
+    cls_output = torch.argmax(model_cls(
+        patch_zip.type(torch.FloatTensor).to(device)), dim=1).cpu().numpy()
+
+    # creat rectangle with color
+    for predict, (sx, sy), (ex, ey) in zip(cls_output, start, end):
+        sx, sy, ex, ey = int(sx), int(sy), int(ex), int(ey)
+        cv2.rectangle(image, (sx, sy), (ex, ey), cmap[predict])
+    plt.imsave(name, image)
+    np.save(name.replace('.jpg', '.npy'), centroid)
+def region_cmp(point, target):
+    right = 0
+    error = 0
+    for i in range(len(point)):
+        for j in range(len(point[0])):
+            if point[i][j]!=0 and point[i][j]==target[i][j]:
+                right+=1
+            if point[i][j]!=0:
+                error+=1
+    return np.float(right/(right+error))
 if __name__ == '__main__':
     root = Path(__file__).parent.parent / 'data/test/Labels'
     npy = [i for i in os.listdir(root) if i.endswith('.npy')]
